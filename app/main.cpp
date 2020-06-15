@@ -54,8 +54,79 @@ Q_IMPORT_PLUGIN(QmlFolderListModelPlugin);
 Q_IMPORT_PLUGIN(QmlSettingsPlugin);
 #endif
 
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+
+#include "main.h"
+
+void foo() {
+    int sockets[2];
+    auto result = socketpair(AF_UNIX, SOCK_STREAM, 0, sockets);
+    PipeProcess p(nullptr, sockets[1]);
+    p.setProgram("/usr/libexec/authopen");
+    // /dev/disk2 is the same as /dev/rdisk2 but rdisk should use aligned writes
+    p.setArguments({"-stdoutpipe", "-o", QString(O_RDWR), "/dev/disk2"});
+    p.start(QIODevice::ReadOnly);
+
+    int fd = -1;
+    const size_t bufferSize = sizeof(struct cmsghdr) + sizeof(int);
+    char buffer[bufferSize];
+
+    struct iovec io_vec[1];
+    io_vec[0].iov_len = bufferSize;
+    io_vec[0].iov_base = buffer;
+
+    const socklen_t socketSize = static_cast<socklen_t>(CMSG_SPACE(sizeof(int)));
+    char cmsg_socket[socketSize];
+
+    struct msghdr message = { 0 };
+    message.msg_iov = io_vec;
+    message.msg_iovlen = 1;
+    message.msg_control = cmsg_socket;
+    message.msg_controllen = socketSize;
+
+    ssize_t size = recvmsg(sockets[0], &message, 0);
+    if (size > 0) {
+        std::cerr << "AYYY" << std::endl;
+        struct cmsghdr *socketHeader = CMSG_FIRSTHDR(&message);
+        if (socketHeader && socketHeader->cmsg_level == SOL_SOCKET && socketHeader->cmsg_type == SCM_RIGHTS) {
+            fd = *reinterpret_cast<int*>(CMSG_DATA(socketHeader));
+
+            QFile f;
+            //f.open(fd, QIODevice::ReadWrite);
+            //std::cerr<< f.read(10).data() << std::endl  ;
+            //f.write("TEST DATA SHOULD APPEAR IN /dev/disk2");
+            //f.close();
+        }
+    }
+    else {
+    }
+
+    p.waitForFinished();
+
+    QByteArray b(512, 'b');
+    QFile f;
+    f.open(fd, QIODevice::WriteOnly);
+    f.write(b);
+    fsync(fd);
+    f.close();
+
+    //p.write("!!!");
+    //p.waitForBytesWritten();
+    std::cerr << p.readAllStandardError().toStdString() << std::endl;
+    std::cerr << p.readAllStandardOutput().toStdString() << std::endl;
+    p.close();
+
+}
+
+
 int main(int argc, char **argv)
 {
+    //foo();
+    //return 0;
     MessageHandler::install();
     CrashHandler::install();
 

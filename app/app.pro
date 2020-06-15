@@ -11,6 +11,7 @@ CONFIG += c++11
 VERSION=4.1.3
 
 HEADERS += \
+    main.h \
     drivemanager.h \
     releasemanager.h \
     utilities.h \
@@ -90,6 +91,10 @@ macx {
 
     QMAKE_INFO_PLIST = Info.plist
     ICON = assets/icon/mediawriter.icns
+
+    MY_ENTITLEMENTS.name = CODE_SIGN_ENTITLEMENTS
+    MY_ENTITLEMENTS.value = "$$top_srcdir/app/Entitlements.plist"
+    QMAKE_MAC_XCODE_SETTINGS += MY_ENTITLEMENTS
 
     QMAKE_POST_LINK += sed -i -e "s/@MEDIAWRITER_VERSION_SHORT@/$$MEDIAWRITER_VERSION_SHORT/g" \"./$${TARGET}.app/Contents/Info.plist\";
     QMAKE_POST_LINK += sed -i -e "s/@MEDIAWRITER_VERSION@/$$MEDIAWRITER_VERSION/g" \"./$${TARGET}.app/Contents/Info.plist\";
